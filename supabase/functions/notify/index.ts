@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     const { data: a } = await admin.from('activity').select('*').eq('id', activity_id).single();
     if (!a) return json({ error: 'actividad no encontrada' }, 404);
 
-    const { data: subs } = await admin.from('push_subscriptions').select('*')
+    const { data: subs, error: subsErr } = await admin.from('push_subscriptions').select('*')
       .neq('user_email', a.actor_email);
 
     webpush.setVapidDetails(
@@ -55,18 +55,21 @@ Deno.serve(async (req) => {
     });
 
     let enviados = 0;
+    const errores: unknown[] = [];
     await Promise.all((subs || []).map(async (s) => {
       try {
         await webpush.sendNotification(s.subscription, payload, { TTL: 60 * 60 * 24 });
         enviados++;
       } catch (e) {
         const code = (e as { statusCode?: number }).statusCode;
+        const body = (e as { body?: string }).body;
+        errores.push({ code, msg: (e as Error).message, body });
+        console.error('push', code, (e as Error).message, body);
         // suscripción vencida (desinstaló la app o borró datos): se elimina
         if (code === 404 || code === 410) await admin.from('push_subscriptions').delete().eq('endpoint', s.endpoint);
-        else console.error('push', code, (e as Error).message);
       }
     }));
-    return json({ enviados });
+    return json({ destinatarios: (subs || []).length, enviados, errores, errorSubs: subsErr?.message });
   } catch (e) {
     console.error(e);
     return json({ error: (e as Error).message }, 500);
