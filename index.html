@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Inventario de componentes</title>
+  <meta name="theme-color" content="#0e0f13">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Inventario compartido de componentes electrónicos: qué tenemos, en qué caja está y quién lo tiene prestado.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Inventario">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="sin-sesion">
+  <header class="barra">
+    <div class="barra-titulo">
+      <img src="icons/icon-192.png" alt="" class="logo">
+      <div>
+        <h1 id="titulo-app">Inventario</h1>
+        <span id="modo" class="modo"></span>
+      </div>
+    </div>
+    <button id="btn-yo" class="avatar" data-action="ajustes" aria-label="Ajustes y cuenta"></button>
+  </header>
+
+  <main id="vista" tabindex="-1"></main>
+
+  <nav class="tabs" aria-label="Secciones">
+    <a href="#inventario" data-tab="inventario"><span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><span>Buscar</span></a>
+    <a href="#cajas" data-tab="cajas"><span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/></svg></span><span>Cajas</span></a>
+    <button class="fab" data-action="nuevo" aria-label="Agregar componente"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <a href="#prestamos" data-tab="prestamos"><span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4 3 8l4 4"/><path d="M3 8h13"/><path d="m17 20 4-4-4-4"/><path d="M21 16H8"/></svg></span><span>Préstamos</span></a>
+    <a href="#novedades" data-tab="novedades"><span class="ico"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span><span>Novedades</span><b id="badge" class="badge oculto"></b></a>
+  </nav>
+
+  <div id="sheet" class="sheet oculto" aria-modal="true" role="dialog">
+    <div class="sheet-fondo" data-action="cerrar"></div>
+    <div class="sheet-cuerpo" id="sheet-cuerpo"></div>
+  </div>
+
+  <dialog id="dialogo"></dialog>
+  <div id="toasts" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
