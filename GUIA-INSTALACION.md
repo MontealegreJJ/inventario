@@ -1,6 +1,6 @@
 # Inventario de componentes — guía de instalación
 
-> **Estado (26 nov 2026):** los pasos 1 a 5 ya están hechos (proyecto `inventario` en São Paulo, conectado a la app). Falta el paso 6 (publicar) y el 7 (instalar en cada celular).
+> **Estado (26 nov 2026):** todo configurado. La app está publicada en **https://montealegrejj.github.io/inventario/**. Solo falta que cada uno la instale en su celular (paso 7).
 
 App compartida para **Manuel Cruz, Mabel Rincón y Juan Montealegre**: qué componentes tienen, en qué caja está cada uno, quién tiene algo prestado y avisos al celular de cada cambio.
 
