@@ -269,6 +269,7 @@ function tarjetaComp(c) {
 function vistaInventario(v) {
   const cats = [...new Set(S.components.map(c => c.category))].sort((a, b) => CATEGORIAS.indexOf(a) - CATEGORIAS.indexOf(b));
   const instalable = !matchMedia('(display-mode: standalone)').matches && !navigator.standalone && !localStorage.getItem('inv-no-instalar');
+  const pedirAvisos = 'Notification' in window && Notification.permission === 'default';
   v.innerHTML = `
     <div class="buscador">
       <input id="q" type="search" placeholder="¿Qué buscas? Ej: lm358, servo, 10k…" value="${esc(S.q)}" autocomplete="off" enterkeyhint="search">
@@ -276,6 +277,7 @@ function vistaInventario(v) {
         `<button class="chip ${S.cat === c ? 'activo' : ''}" data-action="cat" data-cat="${esc(c)}">${c ? esc(c) : 'Todas'}</button>`).join('')}</div>` : ''}
     </div>
     ${instalable ? `<div class="tarjeta instalar"><span class="ico-caja">${ico('movil')}</span><div class="crece peq"><b>Instálala en tu celular</b><div class="suave">Para abrirla como app y recibir avisos.</div></div><button class="btn chico acento" data-action="instalar">Cómo</button><button class="cerrar-x" data-action="no-instalar" aria-label="Ocultar">${ico('x')}</button></div>` : ''}
+    ${pedirAvisos ? `<div class="tarjeta instalar"><span class="ico-caja">${ico('campana')}</span><div class="crece peq"><b>Activa los avisos</b><div class="suave">Para enterarte cuando alguien agregue, saque o preste algo.</div></div><button class="btn chico acento" data-action="activar-push">Activar</button></div>` : ''}
     <div id="lista"></div>`;
   const q = $('#q');
   q.oninput = () => { S.q = q.value; pintarLista(); };
