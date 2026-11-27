@@ -317,11 +317,15 @@ function vistaComponente(v, id) {
     <a class="volver" href="#inventario">${ico('atras')} Volver</a>
     <h2 style="margin-bottom:10px">${esc(c.name)}</h2>
     ${c.aliases?.length ? `<div class="alias">También escrito como: ${c.aliases.map(esc).join(', ')}</div>` : ''}
-    <div class="foto-grande" data-action="${c.photo_url ? 'ver-foto' : 'cambiar-foto'}" data-id="${c.id}">
-      ${c.photo_url ? `<img src="${esc(c.photo_url)}" alt="Foto de ${esc(c.name)}">` : `<div class="agregar-foto"><span class="ico-grande">${ico('camara')}</span>Toca para agregar una foto</div>`}
+    <div class="foto-grande" data-action="${c.photo_url ? 'ver-foto' : 'cambiar-foto'}" data-fuente="camara" data-id="${c.id}">
+      ${c.photo_url ? `<img src="${esc(c.photo_url)}" alt="Foto de ${esc(c.name)}">` : `<div class="agregar-foto"><span class="ico-grande">${ico('camara')}</span>Toca para tomarle una foto</div>`}
     </div>
-    ${c.photo_url ? `<div class="fila" style="justify-content:flex-end;margin-top:6px"><button class="btn chico" data-action="cambiar-foto" data-id="${c.id}">${ico('camara')} Cambiar foto</button></div>` : ''}
-    <input type="file" accept="image/*" id="foto-input" hidden>
+    <div class="botones foto-botones">
+      <button class="btn chico" data-action="cambiar-foto" data-fuente="camara">${ico('camara')} ${c.photo_url ? 'Tomar otra foto' : 'Tomar foto'}</button>
+      <button class="btn chico" data-action="cambiar-foto" data-fuente="galeria">${ico('galeria')} Elegir de la galería</button>
+    </div>
+    <input type="file" accept="image/*" capture="environment" id="foto-camara" hidden>
+    <input type="file" accept="image/*" id="foto-galeria" hidden>
 
     <a class="ubicacion ${c.box ? '' : 'sin'}" href="${c.box ? `#caja/${c.box}` : '#cajas'}">
       <span class="ico-ubic">${ico('caja')}</span>
@@ -370,8 +374,9 @@ function vistaComponente(v, id) {
       await registrar('observacion', c, `comentó en ${c.name}: "${texto.slice(0, 90)}${texto.length > 90 ? '…' : ''}"`);
     });
   };
-  $('#foto-input').onchange = async e => {
+  const subirFoto = async e => {
     const f = e.target.files[0];
+    e.target.value = '';
     if (!f) return;
     toast('Subiendo foto…');
     await intentar(async () => {
@@ -384,6 +389,8 @@ function vistaComponente(v, id) {
       toast('Foto guardada');
     });
   };
+  $('#foto-camara').onchange = subirFoto;
+  $('#foto-galeria').onchange = subirFoto;
 }
 
 // ------------------------------------------------------------ vista: cajas
@@ -519,8 +526,16 @@ function formComponente(c = null, preset = {}) {
       <label for="f-notas">Descripción <span class="suave">(opcional)</span></label>
       <textarea id="f-notas" class="campo" maxlength="1000" placeholder="Ej: amplificador operacional, encapsulado DIP-8">${esc(c?.notes ?? '')}</textarea>
       ${editando ? '' : `<label>Foto <span class="suave">(opcional)</span></label>
-        <input id="f-foto" type="file" accept="image/*" class="campo">
-        <img id="f-foto-prev" class="foto-prev oculto" alt="">`}
+        <div class="botones foto-botones">
+          <button type="button" class="btn" data-fuente="camara">${ico('camara')} Tomar foto</button>
+          <button type="button" class="btn" data-fuente="galeria">${ico('galeria')} Galería</button>
+        </div>
+        <input id="f-foto-camara" type="file" accept="image/*" capture="environment" hidden>
+        <input id="f-foto-galeria" type="file" accept="image/*" hidden>
+        <div id="f-foto-caja" class="foto-elegida oculto">
+          <img id="f-foto-prev" class="foto-prev" alt="Foto elegida">
+          <button type="button" class="btn chico peligro" id="f-foto-quitar">${ico('x')} Quitar foto</button>
+        </div>`}
       <p class="error" id="f-error"></p>
       <div class="botones">
         <button type="button" class="btn" data-action="cerrar">Cancelar</button>
@@ -564,11 +579,23 @@ function formComponente(c = null, preset = {}) {
   nombre.oninput = () => { delete $('#f-parecidos', raiz).dataset.ignorar; pintarParecidos(); };
   pintarParecidos();
 
-  const fotoInp = $('#f-foto', raiz);
-  if (fotoInp) fotoInp.onchange = () => {
-    const f = fotoInp.files[0], img = $('#f-foto-prev', raiz);
-    if (f) { img.src = URL.createObjectURL(f); img.classList.remove('oculto'); } else img.classList.add('oculto');
+  let fotoElegida = null;   // la foto tomada con la cámara o elegida de la galería
+  const mostrarFoto = f => {
+    fotoElegida = f || null;
+    const cajaFoto = $('#f-foto-caja', raiz), img = $('#f-foto-prev', raiz);
+    if (img.src) URL.revokeObjectURL(img.src);
+    if (f) { img.src = URL.createObjectURL(f); cajaFoto.classList.remove('oculto'); }
+    else { img.removeAttribute('src'); cajaFoto.classList.add('oculto'); }
+    raiz.querySelectorAll('[data-fuente="camara"]').forEach(b => b.lastChild.textContent = f ? ' Tomar otra' : ' Tomar foto');
   };
+  if (!editando) {
+    for (const fuente of ['camara', 'galeria']) {
+      const inp = $(`#f-foto-${fuente}`, raiz);
+      $(`.foto-botones [data-fuente="${fuente}"]`, raiz).onclick = () => inp.click();
+      inp.onchange = () => { if (inp.files[0]) mostrarFoto(inp.files[0]); inp.value = ''; };
+    }
+    $('#f-foto-quitar', raiz).onclick = () => mostrarFoto(null);
+  }
 
   $('#f-comp', raiz).onsubmit = async e => {
     e.preventDefault();
@@ -600,7 +627,7 @@ function formComponente(c = null, preset = {}) {
             if (r === 'sumar') destino = casi.comp;
           }
         }
-        const foto = fotoInp?.files[0];
+        const foto = fotoElegida;
         if (destino) await sumarA(compById(destino.id) || destino, datos, foto);
         else await crear(datos, key, foto);
       }
@@ -944,7 +971,7 @@ const acciones = {
   cat: el => { S.cat = el.dataset.cat; render(); },
   'loan-tab': el => { S.loanTab = el.dataset.tab; render(); },
   'ver-foto': el => verFoto(compById(el.dataset.id)?.photo_url),
-  'cambiar-foto': () => $('#foto-input')?.click(),
+  'cambiar-foto': el => $(el.dataset.fuente === 'galeria' ? '#foto-galeria' : '#foto-camara')?.click(),
   'activar-push': () => activarPush(false),
   exportar: exportarCSV,
   'no-instalar': () => { localStorage.setItem('inv-no-instalar', '1'); render(); },
