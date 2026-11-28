@@ -5,7 +5,9 @@
 // A Gemini solo se le envían los componentes: nunca nombres, correos ni teléfonos.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const MODELOS = [Deno.env.get('GEMINI_MODEL') || 'gemini-4-hydrogen', 'gemini-3.8-flash'];
+// Se prueban en orden: si uno está saturado, sigue el siguiente (todos con plan gratis).
+const MODELOS = [Deno.env.get('GEMINI_MODEL') || 'gemini-4-hydrogen', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-4-hydrogen', 'gemini-3.5-flash-lite'];
+const LIMITE_MS = 135000;   // Supabase corta la función a los 150 s
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -31,6 +33,11 @@ Reglas:
 - Piensa la lista completa de partes que necesita el proyecto para funcionar de verdad: control, sensores, actuadores, drivers, alimentación, protecciones, resistencias y condensadores de apoyo, cables y montaje.
 - Cada parte necesaria va en UNA de las dos listas: "tengo" si un componente del inventario sirve, o "comprar" si ninguno sirve.
 - En "tengo" usa la "ref" exacta del inventario. Nunca inventes una ref. "cantidad" es cuántas unidades necesita el proyecto, aunque haya menos disponibles.
+- Antes de poner algo en "comprar", recorre otra vez TODO el inventario, incluidos nombres parecidos, marcas y categorías equivocadas (los nombres los escribieron a mano). Solo va en "comprar" si de verdad no hay nada que sirva.
+- Un reemplazo debe cumplir la función completa. Por ejemplo, un pulsador momentáneo no reemplaza un interruptor de encendido, ni un sensor ultrasónico reemplaza uno de línea. Si no la cumple, va en "comprar".
+- Revisa que los voltajes y corrientes cuadren entre batería, control, driver y motores; si hace falta un elevador, un regulador o más celdas, inclúyelo. Si la batería es recargable, incluye con qué se carga y se protege.
+- Entre dos opciones del inventario, prefiere la más adecuada y menciona la otra en "nota".
+- "nota" va vacía ("") si no hay nada que advertir.
 - Si un componente sirve como reemplazo de otro, ponlo en "tengo" y explica en "nota" qué cambia.
 - Si una nota u observación dice que está dañado, quemado o incompleto, adviértelo en "nota" y no cuentes con las unidades dañadas.
 - Si el nombre no alcanza para saber si sirve (por ejemplo, un motor sin voltaje), ponlo en "tengo" y di en "nota" qué hay que verificar.
@@ -82,6 +89,8 @@ function armarInventario(components, loans, observations) {
 const entero = (n) => Math.max(1, Math.round(Number(n)) || 1);
 const corto = (s, max) => String(s ?? '').trim().slice(0, max);
 
+const nota = (s) => (/^(ning\S*|n\/?a|no aplica|-)\.?$/i.test(corto(s, 400)) ? '' : corto(s, 400));
+
 // Revisa la respuesta: solo quedan componentes que de verdad existen.
 function revisar(r, components) {
   const tengo = new Map();
@@ -92,9 +101,9 @@ function revisar(r, components) {
     if (ya) {
       ya.cantidad += entero(t.cantidad);
       ya.para_que = [ya.para_que, corto(t.para_que, 300)].filter(Boolean).join('; ');
-      ya.nota = [ya.nota, corto(t.nota, 400)].filter(Boolean).join(' ');
+      ya.nota = [ya.nota, nota(t.nota)].filter(Boolean).join(' ');
     } else {
-      tengo.set(c.id, { component_id: c.id, nombre: c.name, cantidad: entero(t.cantidad), para_que: corto(t.para_que, 300), nota: corto(t.nota, 400) });
+      tengo.set(c.id, { component_id: c.id, nombre: c.name, cantidad: entero(t.cantidad), para_que: corto(t.para_que, 300), nota: nota(t.nota) });
     }
   }
   return {
@@ -111,7 +120,11 @@ function revisar(r, components) {
 
 async function preguntarGemini(clave, descripcion, inventario) {
   let ultimo = null;
-  for (const modelo of [...new Set(MODELOS)]) {
+  const fin = Date.now() + LIMITE_MS;
+  for (const [i, modelo] of MODELOS.entries()) {
+    // A los primeros se les da menos tiempo para que alcance el último, que es el más rápido.
+    const queda = fin - Date.now() - (i < MODELOS.length - 1 ? 35000 : 0);
+    if (queda < 8000) continue;
     let resp;
     try {
       resp = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
@@ -125,7 +138,7 @@ async function preguntarGemini(clave, descripcion, inventario) {
           response_format: { type: 'text', mime_type: 'application/json', schema: ESQUEMA },
           generation_config: { thinking_level: 'medium' },
         }),
-        signal: AbortSignal.timeout(65000),
+        signal: AbortSignal.timeout(Math.min(40000, queda)),
       });
     } catch (e) {
       console.error('gemini', modelo, e.message);
@@ -140,6 +153,8 @@ async function preguntarGemini(clave, descripcion, inventario) {
       }
       ultimo = resp.status === 429
         ? 'Se llegó al límite gratis de Gemini por ahora. Espera un minuto; si sigue igual, vuelve mañana.'
+        : resp.status === 503
+        ? 'Gemini está saturado en este momento. Intenta de nuevo en unos minutos.'
         : `Gemini no pudo responder (error ${resp.status}). Intenta de nuevo.`;
       continue;
     }

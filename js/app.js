@@ -493,6 +493,8 @@ function vistaCaja(v, arg) {
 
 // ------------------------------------------------------------ vista: proyectos con IA
 // Cruza la lista de la IA con el inventario de este momento.
+// La IA a veces cita el número interno del componente ("ref 74"), que aquí no sirve.
+const sinRef = s => String(s ?? '').replace(/\s*\(refs?\.?\s*\d+\)|\s+refs?\.?\s*\d+/gi, '');
 function estadoProyecto(p) {
   const r = p.result || {};
   const partes = (r.tengo || []).map(t => {
@@ -542,13 +544,14 @@ function vistaProyectos(v) {
 function pintarAnalizando() {
   for (const b of document.querySelectorAll('#p-enviar, #p-otra')) {
     b.disabled = !!S.analizando;
-    if (S.analizando) b.textContent = 'La IA está revisando… (puede tardar 1 minuto)';
+    if (S.analizando) b.textContent = 'La IA está revisando… (puede tardar hasta 2 minutos)';
   }
 }
 
 async function analizar(texto, id = null) {
   if (S.analizando) return;
   S.analizando = true;
+  if ($('#p-error')) $('#p-error').textContent = '';
   pintarAnalizando();
   try {
     const p = await store.analizarProyecto(texto, id);
@@ -570,13 +573,13 @@ function vistaProyecto(v, id) {
   if (!p) { v.innerHTML = `<a class="volver" href="#proyectos">${ico('atras')} Proyectos</a><p class="suave">Este proyecto ya no existe.</p>`; return; }
   const e = estadoProyecto(p);
   const compra = x => `<div class="tarjeta compra"><div class="fila entre"><b>${esc(x.nombre)}</b><span class="qty">× ${x.cantidad}</span></div>
-    <div class="peq suave">${esc(x.para_que)}</div>${x.especificacion ? `<div class="peq">${esc(x.especificacion)}</div>` : ''}</div>`;
+    <div class="peq suave">${esc(sinRef(x.para_que))}</div>${x.especificacion ? `<div class="peq">${esc(sinRef(x.especificacion))}</div>` : ''}</div>`;
   v.innerHTML = `
     <a class="volver" href="#proyectos">${ico('atras')} Proyectos</a>
     <h2>${esc(p.title)}</h2>
     <div class="aviso ${e.obligatorios.length ? 'amarillo' : 'verde'}" style="margin-top:0">${ico(e.obligatorios.length ? 'carrito' : 'check')}
       <b>${e.obligatorios.length ? `Todavía no alcanza: falta comprar ${e.obligatorios.length === 1 ? '1 cosa' : `${e.obligatorios.length} cosas`}.` : 'Alcanza con lo que tienen.'}</b>${e.opcionales.length ? ` Hay ${e.opcionales.length} ${e.opcionales.length === 1 ? 'compra opcional' : 'compras opcionales'}.` : ''}</div>
-    <p style="white-space:pre-wrap">${esc(p.result?.resumen || '')}</p>
+    <p style="white-space:pre-wrap">${esc(sinRef(p.result?.resumen))}</p>
 
     ${e.obligatorios.length ? `<h3>Falta comprar (${e.obligatorios.length})</h3><div class="lista">${e.obligatorios.map(compra).join('')}</div>` : ''}
     ${e.opcionales.length ? `<h3>Opcional (${e.opcionales.length})</h3><div class="lista">${e.opcionales.map(compra).join('')}</div>` : ''}
@@ -585,10 +588,10 @@ function vistaProyecto(v, id) {
     <h3>Lo que ya tienen (${e.partes.filter(t => t.hay).length})</h3>
     <div class="lista">${e.partes.filter(t => t.hay).map(t => `<a class="comp" href="#comp/${t.component_id}">
       <span class="thumb">${t.c.photo_url ? `<img src="${esc(t.c.photo_url)}" alt="" loading="lazy">` : `<span class="sigla">${SIGLA_CAT[t.c.category] || '··'}</span>`}</span>
-      <div class="crece"><div class="nombre">${esc(t.c.name)}</div><div class="sub">${esc(t.para_que)}</div>${t.nota ? `<div class="sub nota-ia">${esc(t.nota)}</div>` : ''}</div>
+      <div class="crece"><div class="nombre">${esc(t.c.name)}</div><div class="sub">${esc(sinRef(t.para_que))}</div>${t.nota ? `<div class="sub nota-ia">${esc(sinRef(t.nota))}</div>` : ''}</div>
       <div class="lado"><span class="caja-pill ${t.c.box ? '' : 'sin'}">${nombreCaja(t.c.box)}</span><span class="qty">${t.faltan ? `necesita ${t.cantidad}, hay ${t.hay}` : `usa ${t.cantidad} de ${t.hay}`}</span></div></a>`).join('') || '<p class="suave">Nada del inventario sirve para este proyecto.</p>'}</div>
 
-    ${p.result?.dudas?.length ? `<h3>La IA pregunta</h3><div class="tarjeta"><ul class="dudas">${p.result.dudas.map(d => `<li>${esc(d)}</li>`).join('')}</ul></div>` : ''}
+    ${p.result?.dudas?.length ? `<h3>La IA pregunta</h3><div class="tarjeta"><ul class="dudas">${p.result.dudas.map(d => `<li>${esc(sinRef(d))}</li>`).join('')}</ul></div>` : ''}
 
     <h3>Tu idea</h3>
     <textarea id="p-idea2" class="campo" maxlength="4000" rows="5">${esc(p.description)}</textarea>
@@ -598,6 +601,7 @@ function vistaProyecto(v, id) {
       <button class="btn peligro" data-action="borrar-proyecto" data-id="${p.id}">${ico('basura')} Eliminar</button>
     </div>
     <p class="ayuda">Responde las preguntas o cambia la idea aquí y toca «Volver a revisar». Las cantidades se comparan con lo que hay ahora en las cajas. La IA se puede equivocar: revisa la lista antes de comprar.</p>
+    ${/lite/.test(p.model || '') ? '<p class="ayuda">Los modelos principales de Gemini estaban ocupados y respondió uno más sencillo. Más tarde puedes volver a revisar para una lista mejor.</p>' : ''}
     <p class="peq suave centro">Revisado ${hace(p.updated_at || p.created_at)} · ${esc(p.model || '')}</p>`;
   pintarAnalizando();
   $('#p-otra').onclick = () => {
@@ -609,7 +613,7 @@ function vistaProyecto(v, id) {
 
 async function compartirCompras(p) {
   const e = estadoProyecto(p);
-  const linea = x => `- ${x.cantidad} × ${x.nombre}${x.especificacion ? ` (${x.especificacion})` : ''}`;
+  const linea = x => `- ${x.cantidad} × ${x.nombre}${x.especificacion ? ` (${sinRef(x.especificacion)})` : ''}`;
   const text = [`Compras para: ${p.title}`, ...e.obligatorios.map(linea), ...(e.opcionales.length ? ['', 'Opcional:', ...e.opcionales.map(linea)] : [])].join('\n');
   try {
     if (navigator.share) await navigator.share({ text });
