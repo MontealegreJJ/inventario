@@ -60,6 +60,14 @@ En la app cada uno toca su nombre y escribe su correo **la primera vez**; el cel
 
 ⚠️ `SECRETOS-NO-SUBIR.txt` **no se sube a GitHub ni se comparte**: con esa clave cualquiera podría mandarles avisos.
 
+## 5b. Conectar la IA (función `proyecto`, opcional)
+
+1. Entra a <https://aistudio.google.com/apikey> con una cuenta de Google y crea una clave (**Create API key**). No pide tarjeta.
+2. **Edge Functions → Deploy a new function → Via Editor**. Nombre: `proyecto` (exacto). Pega el contenido de `supabase/functions/proyecto/index.ts` → **Deploy function**.
+3. **Edge Functions → Secrets**: agrega `GEMINI_API_KEY` con la clave. **No la escribas en ningún archivo de la app.**
+
+En el plan gratis, Google puede usar lo que se le envía para mejorar sus productos. La app solo le manda la idea del proyecto y los componentes con sus notas y observaciones: no escriban ahí datos personales. Los límites del plan se ven en <https://aistudio.google.com/rate-limit>.
+
 ## 6. Publicar la app en internet (GitHub Pages)
 
 1. En <https://github.com> → **New repository** → nombre `inventario` → **Public** → **Create**.
@@ -88,8 +96,9 @@ Luego, en la app: tocar su nombre → contraseña → círculo con las iniciales
   - También entiende `10kΩ` = `10k ohm` = `10K`, `4,7k` = `4.7k`, `resistor` = `resistencia`, `condensador` = `capacitor`.
   - La forma en que cada uno lo escribió queda guardada como «también escrito como», y la búsqueda la encuentra.
 - **Ficha del componente:** foto, caja, cantidades, quién lo tiene, observaciones (ej. «uno está quemado»), *Saqué/gasté*, *Agregué más*, *Prestar*, *Editar*, *Eliminar*.
-- **📦 Cajas:** lo que hay en cada caja numerada. Una caja nueva se crea sola al guardar un componente con un número que no existía.
+- **📦 Cajas:** lo que hay en cada caja numerada, con su foto. Una caja nueva se crea sola al guardar un componente con un número que no existía.
 - **🤝 Préstamos:** a alguien del grupo o a alguien externo (nombre y celular), con fecha de devolución opcional. Muestra quién lo tiene, desde cuándo y a qué caja vuelve. Los préstamos vencidos salen en rojo.
+- **✨ Proyectos:** escriban la idea de un proyecto y la IA dice qué partes ya tienen (y en qué caja) y qué falta comprar. La lista de compras se puede compartir.
 - **🔔 Novedades:** historial de todo lo que pasó. Cada cambio le llega como aviso a los otros dos.
 - **Descargar inventario:** en el menú de las iniciales, un archivo que abre en Excel.
 

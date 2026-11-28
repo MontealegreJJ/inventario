@@ -34,8 +34,10 @@ $$;
 create table if not exists public.boxes (
   number      int primary key check (number > 0),
   description text not null default '',
+  photo_url   text,
   created_at  timestamptz not null default now()
 );
+alter table public.boxes add column if not exists photo_url text;  -- foto de la caja
 
 -- ---------- 3. Componentes ------------------------------------------
 -- "key" es el nombre normalizado (sin mayúsculas, espacios ni guiones).
@@ -103,6 +105,18 @@ create table if not exists public.push_subscriptions (
   created_at   timestamptz not null default now()
 );
 
+-- ---------- 7b. Proyectos revisados por la IA ------------------------
+create table if not exists public.projects (
+  id          uuid primary key default gen_random_uuid(),
+  title       text not null,
+  description text not null,
+  result      jsonb not null default '{}',
+  model       text,
+  created_by  text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
 -- ---------- 8. Seguridad: solo los tres miembros ven y editan ---------
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -112,7 +126,7 @@ revoke all on all tables in schema public from anon;
 do $$
 declare t text;
 begin
-  foreach t in array array['boxes','components','observations','loans','activity','push_subscriptions']
+  foreach t in array array['boxes','components','observations','loans','activity','push_subscriptions','projects']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "solo miembros" on public.%I', t);
@@ -156,7 +170,7 @@ create policy "miembros borran fotos" on storage.objects
 do $$
 declare t text;
 begin
-  foreach t in array array['boxes','components','observations','loans','activity']
+  foreach t in array array['boxes','components','observations','loans','activity','projects']
   loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', t);

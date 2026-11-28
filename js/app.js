@@ -21,7 +21,8 @@ const ICONO_NOV = {
 };
 
 const S = {
-  me: null, members: [], components: [], boxes: [], loans: [], activity: [], observations: [],
+  me: null, members: [], components: [], boxes: [], loans: [], activity: [], observations: [], projects: [],
+  analizando: null,
   q: '', cat: '', loanTab: 'activos', installEvt: null,
 };
 
@@ -80,7 +81,7 @@ function preguntar(titulo, html, opciones) {
 function verFoto(url) {
   const d = $('#dialogo');
   d.className = 'foto';
-  d.innerHTML = `<img src="${esc(url)}" alt="Foto del componente">`;
+  d.innerHTML = `<img src="${esc(url)}" alt="Foto">`;
   d.onclick = () => d.close();
   d.showModal();
 }
@@ -111,6 +112,72 @@ async function registrar(kind, comp, detail) {
   store.notify(a.id);
 }
 
+// Botones de foto de una ficha (componente o caja): se guarda apenas se elige.
+const botonesFoto = tiene => `<div class="botones foto-botones">
+      <button class="btn chico" data-action="cambiar-foto" data-fuente="camara">${ico('camara')} ${tiene ? 'Tomar otra foto' : 'Tomar foto'}</button>
+      <button class="btn chico" data-action="cambiar-foto" data-fuente="galeria">${ico('galeria')} Elegir de la galería</button>
+    </div>
+    <input type="file" accept="image/*" capture="environment" id="foto-camara" hidden>
+    <input type="file" accept="image/*" id="foto-galeria" hidden>`;
+
+const subirFoto = async (carpeta, f) => store.uploadPhoto(carpeta, await comprimir(f, store.mode === 'demo' ? 700 : 1000));
+
+function conectarBotonesFoto(carpeta, guardar) {
+  const subir = async e => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    toast('Subiendo foto…');
+    await intentar(async () => {
+      await guardar(await subirFoto(carpeta, f));
+      toast('Foto guardada');
+    });
+  };
+  $('#foto-camara').onchange = subir;
+  $('#foto-galeria').onchange = subir;
+}
+
+// Selector de foto dentro de un formulario: se guarda al enviar el formulario.
+const selectorFoto = () => `<div class="botones foto-botones">
+          <button type="button" class="btn" data-fuente="camara">${ico('camara')} Tomar foto</button>
+          <button type="button" class="btn" data-fuente="galeria">${ico('galeria')} Galería</button>
+        </div>
+        <input id="f-foto-camara" type="file" accept="image/*" capture="environment" hidden>
+        <input id="f-foto-galeria" type="file" accept="image/*" hidden>
+        <div id="f-foto-caja" class="foto-elegida oculto">
+          <img id="f-foto-prev" class="foto-prev" alt="Foto elegida">
+          <button type="button" class="btn chico peligro" id="f-foto-quitar">${ico('x')} Quitar foto</button>
+        </div>`;
+
+// `actual` es la foto que ya tenía. Devuelve { nueva: archivo o null, quitada: bool }.
+function conectarSelectorFoto(raiz, actual = null) {
+  const est = { nueva: null, quitada: false };
+  const img = $('#f-foto-prev', raiz);
+  let temporal = null;
+  const mostrar = url => {
+    if (temporal) { URL.revokeObjectURL(temporal); temporal = null; }
+    if (url) img.src = url; else img.removeAttribute('src');
+    $('#f-foto-caja', raiz).classList.toggle('oculto', !url);
+    $('.foto-botones [data-fuente="camara"]', raiz).lastChild.textContent = url ? ' Tomar otra' : ' Tomar foto';
+  };
+  for (const fuente of ['camara', 'galeria']) {
+    const inp = $(`#f-foto-${fuente}`, raiz);
+    $(`.foto-botones [data-fuente="${fuente}"]`, raiz).onclick = () => inp.click();
+    inp.onchange = () => {
+      const f = inp.files[0];
+      inp.value = '';
+      if (!f) return;
+      est.nueva = f;
+      const url = URL.createObjectURL(f);
+      mostrar(url);
+      temporal = url;
+    };
+  }
+  $('#f-foto-quitar', raiz).onclick = () => { est.nueva = null; est.quitada = !!actual; mostrar(null); };
+  mostrar(actual);
+  return est;
+}
+
 async function asegurarCaja(n) {
   if (!n || cajaPorNum(n)) return;
   await store.insert('boxes', { number: n, description: '' });
@@ -137,6 +204,7 @@ async function cargarTodo() {
   const [members, components, boxes, loans, activity, observations] = await Promise.all(
     [store.members(), ...['components', 'boxes', 'loans', 'activity', 'observations'].map(t => store.list(t))]);
   Object.assign(S, { members, components, boxes, loans, activity, observations });
+  S.projects = await store.list('projects').catch(() => []);
 }
 
 async function entrar() {
@@ -205,6 +273,7 @@ function cambioRemoto(table, p) {
     try {
       for (const t of tablas) S[t] = await store.list(t);
     } catch (e) { console.error(e); }
+    if (document.activeElement?.matches('#p-idea, #p-idea2')) { pintarBadge(); return; }
     if (!$('#sheet').classList.contains('oculto') && tablas.every(t => t === 'activity')) { pintarBadge(); return; }
     render();
   }, 150);
@@ -230,11 +299,12 @@ function ruta() {
 function render() {
   if (!S.me) return;
   const { vista, arg } = ruta();
-  const tab = { comp: 'inventario', caja: 'cajas' }[vista] || vista;
+  const tab = { comp: 'inventario', caja: 'cajas', proyecto: 'proyectos' }[vista] || vista;
+  $('.btn-ia').classList.toggle('activo', tab === 'proyectos');
   document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('activo', a.dataset.tab === tab));
   document.documentElement.style.setProperty('--barra-alto', $('.barra').offsetHeight + 'px');
   const v = $('#vista');
-  const vistas = { inventario: vistaInventario, comp: vistaComponente, cajas: vistaCajas, caja: vistaCaja, prestamos: vistaPrestamos, novedades: vistaNovedades };
+  const vistas = { inventario: vistaInventario, comp: vistaComponente, cajas: vistaCajas, caja: vistaCaja, prestamos: vistaPrestamos, novedades: vistaNovedades, proyectos: vistaProyectos, proyecto: vistaProyecto };
   (vistas[vista] || vistaInventario)(v, arg);
   if (store.mode === 'nube') $('#modo').textContent = `${S.components.length} componentes`;
   pintarBadge();
@@ -278,6 +348,7 @@ function vistaInventario(v) {
     </div>
     ${instalable ? `<div class="tarjeta instalar"><span class="ico-caja">${ico('movil')}</span><div class="crece peq"><b>Instálala en tu celular</b><div class="suave">Para abrirla como app y recibir avisos.</div></div><button class="btn chico acento" data-action="instalar">Cómo</button><button class="cerrar-x" data-action="no-instalar" aria-label="Ocultar">${ico('x')}</button></div>` : ''}
     ${pedirAvisos ? `<div class="tarjeta instalar"><span class="ico-caja">${ico('campana')}</span><div class="crece peq"><b>Activa los avisos</b><div class="suave">Para enterarte cuando alguien agregue, saque o preste algo.</div></div><button class="btn chico acento" data-action="activar-push">Activar</button></div>` : ''}
+    ${!S.q && !S.cat ? `<a class="tarjeta instalar enlace-ia" href="#proyectos"><span class="ico-caja">${ico('ia')}</span><div class="crece peq"><b>¿Tienes un proyecto?</b><div class="suave">La IA revisa si les alcanza con lo que hay o qué falta comprar.</div></div>${ico('sig')}</a>` : ''}
     <div id="lista"></div>`;
   const q = $('#q');
   q.oninput = () => { S.q = q.value; pintarLista(); };
@@ -320,15 +391,10 @@ function vistaComponente(v, id) {
     <div class="foto-grande" data-action="${c.photo_url ? 'ver-foto' : 'cambiar-foto'}" data-fuente="camara" data-id="${c.id}">
       ${c.photo_url ? `<img src="${esc(c.photo_url)}" alt="Foto de ${esc(c.name)}">` : `<div class="agregar-foto"><span class="ico-grande">${ico('camara')}</span>Toca para tomarle una foto</div>`}
     </div>
-    <div class="botones foto-botones">
-      <button class="btn chico" data-action="cambiar-foto" data-fuente="camara">${ico('camara')} ${c.photo_url ? 'Tomar otra foto' : 'Tomar foto'}</button>
-      <button class="btn chico" data-action="cambiar-foto" data-fuente="galeria">${ico('galeria')} Elegir de la galería</button>
-    </div>
-    <input type="file" accept="image/*" capture="environment" id="foto-camara" hidden>
-    <input type="file" accept="image/*" id="foto-galeria" hidden>
+    ${botonesFoto(c.photo_url)}
 
     <a class="ubicacion ${c.box ? '' : 'sin'}" href="${c.box ? `#caja/${c.box}` : '#cajas'}">
-      <span class="ico-ubic">${ico('caja')}</span>
+      ${iconoCaja(caja)}
       <div class="crece"><div class="peq">Está guardado en</div><div class="num">${nombreCaja(c.box)}</div>
       ${caja?.description ? `<div class="peq">${esc(caja.description)}</div>` : ''}</div>${ico('sig')}
     </a>
@@ -374,26 +440,18 @@ function vistaComponente(v, id) {
       await registrar('observacion', c, `comentó en ${c.name}: "${texto.slice(0, 90)}${texto.length > 90 ? '…' : ''}"`);
     });
   };
-  const subirFoto = async e => {
-    const f = e.target.files[0];
-    e.target.value = '';
-    if (!f) return;
-    toast('Subiendo foto…');
-    await intentar(async () => {
-      const blob = await comprimir(f, store.mode === 'demo' ? 700 : 1000);
-      const url = await store.uploadPhoto(c.id, blob);
-      const vieja = c.photo_url;
-      await store.update('components', c.id, { photo_url: url, updated_by: S.me.name, updated_at: ahora() });
-      if (vieja) store.removePhoto(vieja).catch(() => {});
-      await registrar('foto', c, `${vieja ? 'cambió' : 'agregó'} la foto de ${c.name}`);
-      toast('Foto guardada');
-    });
-  };
-  $('#foto-camara').onchange = subirFoto;
-  $('#foto-galeria').onchange = subirFoto;
+  conectarBotonesFoto(c.id, async url => {
+    const vieja = c.photo_url;
+    await store.update('components', c.id, { photo_url: url, updated_by: S.me.name, updated_at: ahora() });
+    if (vieja) store.removePhoto(vieja).catch(() => {});
+    await registrar('foto', c, `${vieja ? 'cambió' : 'agregó'} la foto de ${c.name}`);
+  });
 }
 
 // ------------------------------------------------------------ vista: cajas
+// Foto de la caja en pequeño, o el ícono si no tiene.
+const iconoCaja = b => `<span class="ico-ubic">${b?.photo_url ? `<img src="${esc(b.photo_url)}" alt="">` : ico('caja')}</span>`;
+
 function vistaCajas(v) {
   const sinCaja = S.components.filter(c => !c.box);
   v.innerHTML = `
@@ -401,6 +459,7 @@ function vistaCajas(v) {
     ${S.boxes.length ? `<div class="rejilla">${S.boxes.map(b => {
       const comps = S.components.filter(c => c.box === b.number);
       return `<button class="tarjeta caja-card" data-go="caja/${b.number}">
+        ${b.photo_url ? `<img class="caja-foto" src="${esc(b.photo_url)}" alt="Foto de la caja ${b.number}" loading="lazy">` : ''}
         <span class="num">${b.number}</span>
         <span class="desc">${esc(b.description) || '<i>Sin descripción</i>'}</span>
         <span class="peq">${comps.length} componente${comps.length === 1 ? '' : 's'}</span></button>`;
@@ -416,10 +475,146 @@ function vistaCaja(v, arg) {
     <a class="volver" href="#cajas">${ico('atras')} Todas las cajas</a>
     <div class="ubicacion"><span class="ico-ubic">${ico('caja')}</span><div class="crece"><div class="num">Caja ${n}</div>
       <div class="peq">${esc(b?.description || '')}</div></div></div>
-    ${b ? `<div class="botones" style="margin-top:0"><button class="btn chico" data-action="editar-caja" data-n="${n}">${ico('editar')} Editar caja</button>
+    ${b ? `<div class="foto-grande de-caja" data-action="${b.photo_url ? 'ver-foto' : 'cambiar-foto'}" data-fuente="camara" data-n="${n}">
+      ${b.photo_url ? `<img src="${esc(b.photo_url)}" alt="Foto de la caja ${n}">` : `<div class="agregar-foto"><span class="ico-grande">${ico('camara')}</span>Toca para tomarle una foto a la caja</div>`}
+    </div>
+    ${botonesFoto(b.photo_url)}` : ''}
+    ${b ? `<div class="botones"><button class="btn chico" data-action="editar-caja" data-n="${n}">${ico('editar')} Editar caja</button>
       <button class="btn chico" data-action="nuevo" data-caja="${n}">${ico('mas')} Agregar a esta caja</button></div>` : '<p class="suave">Esta caja no existe.</p>'}
     <h3>Contenido (${comps.length})</h3>
     <div class="lista">${comps.map(tarjetaComp).join('') || '<p class="suave">La caja está vacía.</p>'}</div>`;
+  if (b) conectarBotonesFoto(`caja-${n}`, async url => {
+    const vieja = b.photo_url;
+    await store.update('boxes', n, { photo_url: url });
+    if (vieja) store.removePhoto(vieja).catch(() => {});
+    await registrar('caja', null, `${vieja ? 'cambió' : 'agregó'} la foto de la caja ${n}`);
+  });
+}
+
+// ------------------------------------------------------------ vista: proyectos con IA
+// Cruza la lista de la IA con el inventario de este momento.
+function estadoProyecto(p) {
+  const r = p.result || {};
+  const partes = (r.tengo || []).map(t => {
+    const c = compById(t.component_id);
+    const hay = c ? disponibles(c) : 0;
+    return { ...t, c, hay, faltan: Math.max(0, t.cantidad - hay) };
+  });
+  const comprar = [
+    ...partes.filter(t => t.faltan).map(t => ({
+      nombre: t.c?.name || t.nombre, cantidad: t.faltan, para_que: t.para_que, obligatorio: true,
+      especificacion: !t.c ? 'Ya no está en el inventario.' : `Se necesitan ${t.cantidad} y hay ${t.hay} en la caja.${prestadas(t.c.id) ? ` Hay ${prestadas(t.c.id)} prestadas: si las devuelven, puede que no toque comprar.` : ''}`,
+    })),
+    ...(r.comprar || []),
+  ];
+  return { partes, comprar, obligatorios: comprar.filter(x => x.obligatorio), opcionales: comprar.filter(x => !x.obligatorio) };
+}
+const etiquetaProyecto = e => e.obligatorios.length
+  ? `<span class="etq prestado">Falta comprar ${e.obligatorios.length}</span>`
+  : '<span class="etq ok">Alcanza</span>';
+
+function vistaProyectos(v) {
+  v.innerHTML = `
+    <h2>Proyectos con IA</h2>
+    <form id="form-proy" class="tarjeta">
+      <label for="p-idea" style="margin-top:0">¿Qué quieres hacer?</label>
+      <textarea id="p-idea" class="campo" maxlength="4000" rows="5" placeholder="Ej: un carro que siga una línea negra, con dos motores y batería recargable">${esc(localStorage.getItem('inv-idea') || '')}</textarea>
+      <p class="error" id="p-error"></p>
+      <div class="botones"><button class="btn prim ancho" id="p-enviar">${ico('ia')} Revisar si nos alcanza</button></div>
+      <p class="ayuda">Entre más detalles escribas, mejor. A Gemini (Google) se le envía la idea, los componentes y sus observaciones; nunca correos, contraseñas ni a quién le prestaron. La IA se puede equivocar: revisa la lista antes de comprar.</p>
+    </form>
+    ${S.projects.length ? `<h3>Proyectos revisados</h3><div class="lista">${S.projects.map(p => `<a class="comp" href="#proyecto/${p.id}">
+      <span class="thumb">${ico('ia')}</span>
+      <div class="crece"><div class="nombre">${esc(p.title)}</div><div class="sub">${esc(p.created_by || '')} · ${hace(p.updated_at || p.created_at)}</div></div>
+      ${etiquetaProyecto(estadoProyecto(p))}</a>`).join('')}</div>` : ''}`;
+  const idea = $('#p-idea');
+  idea.oninput = () => localStorage.setItem('inv-idea', idea.value);
+  pintarAnalizando();
+  $('#form-proy').onsubmit = e => {
+    e.preventDefault();
+    const texto = idea.value.trim();
+    if (texto.length < 10) { $('#p-error').textContent = 'Cuenta un poco más sobre el proyecto.'; return; }
+    analizar(texto);
+  };
+}
+
+// Mientras la IA responde, los botones quedan bloqueados aunque la pantalla se refresque.
+function pintarAnalizando() {
+  for (const b of document.querySelectorAll('#p-enviar, #p-otra')) {
+    b.disabled = !!S.analizando;
+    if (S.analizando) b.textContent = 'La IA está revisando… (puede tardar 1 minuto)';
+  }
+}
+
+async function analizar(texto, id = null) {
+  if (S.analizando) return;
+  S.analizando = true;
+  pintarAnalizando();
+  try {
+    const p = await store.analizarProyecto(texto, id);
+    S.projects = [p, ...S.projects.filter(x => x.id !== p.id)];
+    if (!id) localStorage.removeItem('inv-idea');
+    S.analizando = null;
+    if (location.hash === `#proyecto/${p.id}`) render(); else location.hash = `proyecto/${p.id}`;
+    toast('La IA terminó de revisar');
+  } catch (ex) {
+    S.analizando = null;
+    render();
+    const err = $('#p-error');
+    if (err) err.textContent = ex.message; else toast(ex.message, 'error');
+  }
+}
+
+function vistaProyecto(v, id) {
+  const p = S.projects.find(x => x.id === id);
+  if (!p) { v.innerHTML = `<a class="volver" href="#proyectos">${ico('atras')} Proyectos</a><p class="suave">Este proyecto ya no existe.</p>`; return; }
+  const e = estadoProyecto(p);
+  const compra = x => `<div class="tarjeta compra"><div class="fila entre"><b>${esc(x.nombre)}</b><span class="qty">× ${x.cantidad}</span></div>
+    <div class="peq suave">${esc(x.para_que)}</div>${x.especificacion ? `<div class="peq">${esc(x.especificacion)}</div>` : ''}</div>`;
+  v.innerHTML = `
+    <a class="volver" href="#proyectos">${ico('atras')} Proyectos</a>
+    <h2>${esc(p.title)}</h2>
+    <div class="aviso ${e.obligatorios.length ? 'amarillo' : 'verde'}" style="margin-top:0">${ico(e.obligatorios.length ? 'carrito' : 'check')}
+      <b>${e.obligatorios.length ? `Todavía no alcanza: falta comprar ${e.obligatorios.length === 1 ? '1 cosa' : `${e.obligatorios.length} cosas`}.` : 'Alcanza con lo que tienen.'}</b>${e.opcionales.length ? ` Hay ${e.opcionales.length} ${e.opcionales.length === 1 ? 'compra opcional' : 'compras opcionales'}.` : ''}</div>
+    <p style="white-space:pre-wrap">${esc(p.result?.resumen || '')}</p>
+
+    ${e.obligatorios.length ? `<h3>Falta comprar (${e.obligatorios.length})</h3><div class="lista">${e.obligatorios.map(compra).join('')}</div>` : ''}
+    ${e.opcionales.length ? `<h3>Opcional (${e.opcionales.length})</h3><div class="lista">${e.opcionales.map(compra).join('')}</div>` : ''}
+    ${e.comprar.length ? `<div class="botones"><button class="btn" data-action="compartir-compras" data-id="${p.id}">${ico('compartir')} Compartir lista de compras</button></div>` : ''}
+
+    <h3>Lo que ya tienen (${e.partes.filter(t => t.hay).length})</h3>
+    <div class="lista">${e.partes.filter(t => t.hay).map(t => `<a class="comp" href="#comp/${t.component_id}">
+      <span class="thumb">${t.c.photo_url ? `<img src="${esc(t.c.photo_url)}" alt="" loading="lazy">` : `<span class="sigla">${SIGLA_CAT[t.c.category] || '··'}</span>`}</span>
+      <div class="crece"><div class="nombre">${esc(t.c.name)}</div><div class="sub">${esc(t.para_que)}</div>${t.nota ? `<div class="sub nota-ia">${esc(t.nota)}</div>` : ''}</div>
+      <div class="lado"><span class="caja-pill ${t.c.box ? '' : 'sin'}">${nombreCaja(t.c.box)}</span><span class="qty">${t.faltan ? `necesita ${t.cantidad}, hay ${t.hay}` : `usa ${t.cantidad} de ${t.hay}`}</span></div></a>`).join('') || '<p class="suave">Nada del inventario sirve para este proyecto.</p>'}</div>
+
+    ${p.result?.dudas?.length ? `<h3>La IA pregunta</h3><div class="tarjeta"><ul class="dudas">${p.result.dudas.map(d => `<li>${esc(d)}</li>`).join('')}</ul></div>` : ''}
+
+    <h3>Tu idea</h3>
+    <textarea id="p-idea2" class="campo" maxlength="4000" rows="5">${esc(p.description)}</textarea>
+    <p class="error" id="p-error"></p>
+    <div class="botones">
+      <button class="btn acento" id="p-otra">${ico('ia')} Volver a revisar</button>
+      <button class="btn peligro" data-action="borrar-proyecto" data-id="${p.id}">${ico('basura')} Eliminar</button>
+    </div>
+    <p class="ayuda">Responde las preguntas o cambia la idea aquí y toca «Volver a revisar». Las cantidades se comparan con lo que hay ahora en las cajas. La IA se puede equivocar: revisa la lista antes de comprar.</p>
+    <p class="peq suave centro">Revisado ${hace(p.updated_at || p.created_at)} · ${esc(p.model || '')}</p>`;
+  pintarAnalizando();
+  $('#p-otra').onclick = () => {
+    const texto = $('#p-idea2').value.trim();
+    if (texto.length < 10) { $('#p-error').textContent = 'Cuenta un poco más sobre el proyecto.'; return; }
+    analizar(texto, p.id);
+  };
+}
+
+async function compartirCompras(p) {
+  const e = estadoProyecto(p);
+  const linea = x => `- ${x.cantidad} × ${x.nombre}${x.especificacion ? ` (${x.especificacion})` : ''}`;
+  const text = [`Compras para: ${p.title}`, ...e.obligatorios.map(linea), ...(e.opcionales.length ? ['', 'Opcional:', ...e.opcionales.map(linea)] : [])].join('\n');
+  try {
+    if (navigator.share) await navigator.share({ text });
+    else { await navigator.clipboard.writeText(text); toast('Lista copiada'); }
+  } catch (ex) { if (ex.name !== 'AbortError') toast('No se pudo compartir la lista.', 'error'); }
 }
 
 // ------------------------------------------------------------ vista: préstamos
@@ -526,16 +721,7 @@ function formComponente(c = null, preset = {}) {
       <label for="f-notas">Descripción <span class="suave">(opcional)</span></label>
       <textarea id="f-notas" class="campo" maxlength="1000" placeholder="Ej: amplificador operacional, encapsulado DIP-8">${esc(c?.notes ?? '')}</textarea>
       ${editando ? '' : `<label>Foto <span class="suave">(opcional)</span></label>
-        <div class="botones foto-botones">
-          <button type="button" class="btn" data-fuente="camara">${ico('camara')} Tomar foto</button>
-          <button type="button" class="btn" data-fuente="galeria">${ico('galeria')} Galería</button>
-        </div>
-        <input id="f-foto-camara" type="file" accept="image/*" capture="environment" hidden>
-        <input id="f-foto-galeria" type="file" accept="image/*" hidden>
-        <div id="f-foto-caja" class="foto-elegida oculto">
-          <img id="f-foto-prev" class="foto-prev" alt="Foto elegida">
-          <button type="button" class="btn chico peligro" id="f-foto-quitar">${ico('x')} Quitar foto</button>
-        </div>`}
+        ${selectorFoto()}`}
       <p class="error" id="f-error"></p>
       <div class="botones">
         <button type="button" class="btn" data-action="cerrar">Cancelar</button>
@@ -579,23 +765,7 @@ function formComponente(c = null, preset = {}) {
   nombre.oninput = () => { delete $('#f-parecidos', raiz).dataset.ignorar; pintarParecidos(); };
   pintarParecidos();
 
-  let fotoElegida = null;   // la foto tomada con la cámara o elegida de la galería
-  const mostrarFoto = f => {
-    fotoElegida = f || null;
-    const cajaFoto = $('#f-foto-caja', raiz), img = $('#f-foto-prev', raiz);
-    if (img.src) URL.revokeObjectURL(img.src);
-    if (f) { img.src = URL.createObjectURL(f); cajaFoto.classList.remove('oculto'); }
-    else { img.removeAttribute('src'); cajaFoto.classList.add('oculto'); }
-    raiz.querySelectorAll('[data-fuente="camara"]').forEach(b => b.lastChild.textContent = f ? ' Tomar otra' : ' Tomar foto');
-  };
-  if (!editando) {
-    for (const fuente of ['camara', 'galeria']) {
-      const inp = $(`#f-foto-${fuente}`, raiz);
-      $(`.foto-botones [data-fuente="${fuente}"]`, raiz).onclick = () => inp.click();
-      inp.onchange = () => { if (inp.files[0]) mostrarFoto(inp.files[0]); inp.value = ''; };
-    }
-    $('#f-foto-quitar', raiz).onclick = () => mostrarFoto(null);
-  }
+  const fotoSel = editando ? null : conectarSelectorFoto(raiz);
 
   $('#f-comp', raiz).onsubmit = async e => {
     e.preventDefault();
@@ -627,7 +797,7 @@ function formComponente(c = null, preset = {}) {
             if (r === 'sumar') destino = casi.comp;
           }
         }
-        const foto = fotoElegida;
+        const foto = fotoSel?.nueva;
         if (destino) await sumarA(compById(destino.id) || destino, datos, foto);
         else await crear(datos, key, foto);
       }
@@ -831,29 +1001,45 @@ function formCaja(b = null) {
       <input id="cj-n" class="campo" type="number" inputmode="numeric" min="1" required value="${b?.number ?? (Math.max(0, ...S.boxes.map(x => x.number)) + 1)}">
       <label for="cj-d">¿Qué hay o dónde está? <span class="suave">(opcional)</span></label>
       <input id="cj-d" class="campo" maxlength="140" placeholder="Ej: caja roja, estante de arriba — sensores" value="${esc(b?.description ?? '')}">
+      <label>Foto de la caja <span class="suave">(opcional)</span></label>
+      ${selectorFoto()}
       <p class="error" id="cj-error"></p>
       <div class="botones">
         ${b ? '<button type="button" class="btn peligro" id="cj-borrar">Eliminar caja</button>' : ''}
-        <button type="button" class="btn" data-action="cerrar">Cancelar</button><button class="btn prim">Guardar</button>
+        <button type="button" class="btn" data-action="cerrar">Cancelar</button><button class="btn prim" id="cj-guardar">Guardar</button>
       </div>
     </form>`);
+  const fotoSel = conectarSelectorFoto(raiz, b?.photo_url);
   $('#f-caja-form', raiz).onsubmit = async e => {
     e.preventDefault();
     const number = parseInt($('#cj-n', raiz).value, 10);
     const description = $('#cj-d', raiz).value.trim();
     if (!(number > 0)) return;
+    const err = $('#cj-error', raiz), boton = $('#cj-guardar', raiz);
+    err.textContent = '';
+    if (number !== b?.number && cajaPorNum(number)) { err.textContent = `Ya existe la caja ${number}.`; return; }
+    boton.disabled = true;
     try {
+      const vieja = b?.photo_url;
+      const datos = { number, description };
+      if (fotoSel.nueva) { toast('Subiendo foto…'); datos.photo_url = await subirFoto(`caja-${number}`, fotoSel.nueva); }
+      else if (fotoSel.quitada) datos.photo_url = null;
       if (b) {
-        await store.update('boxes', b.number, { number, description });
-        if (number !== b.number) await registrar('caja', null, `cambió el número de la caja ${b.number} a ${number}`);
+        const antes = b.number;
+        await store.update('boxes', antes, datos);
+        if ('photo_url' in datos) {
+          if (vieja) store.removePhoto(vieja).catch(() => {});
+          await registrar('caja', null, `${!datos.photo_url ? 'quitó' : vieja ? 'cambió' : 'agregó'} la foto de la caja ${number}`);
+        }
+        if (number !== antes) await registrar('caja', null, `cambió el número de la caja ${antes} a ${number}`);
         cerrarHoja();
         location.hash = `caja/${number}`;
       } else {
-        await store.insert('boxes', { number, description });
+        await store.insert('boxes', datos);
         await registrar('caja', null, `creó la caja ${number}${description ? ` (${description})` : ''}`);
         cerrarHoja();
       }
-    } catch (ex) { $('#cj-error', raiz).textContent = ex.message; }
+    } catch (ex) { err.textContent = ex.message; boton.disabled = false; }
   };
   const borrar = $('#cj-borrar', raiz);
   if (borrar) borrar.onclick = async () => {
@@ -864,6 +1050,7 @@ function formCaja(b = null) {
     if (!r) return;
     try {
       await store.remove('boxes', b.number);
+      if (b.photo_url) store.removePhoto(b.photo_url).catch(() => {});
       await registrar('caja', null, `eliminó la caja ${b.number}${n ? ` (${n} componentes quedaron sin caja)` : ''}`);
       cerrarHoja();
       location.hash = 'cajas';
@@ -970,8 +1157,16 @@ const acciones = {
   ajustes: hojaAjustes,
   cat: el => { S.cat = el.dataset.cat; render(); },
   'loan-tab': el => { S.loanTab = el.dataset.tab; render(); },
-  'ver-foto': el => verFoto(compById(el.dataset.id)?.photo_url),
+  'ver-foto': el => verFoto((el.dataset.n ? cajaPorNum(+el.dataset.n) : compById(el.dataset.id))?.photo_url),
   'cambiar-foto': el => $(el.dataset.fuente === 'galeria' ? '#foto-galeria' : '#foto-camara')?.click(),
+  'compartir-compras': el => compartirCompras(S.projects.find(p => p.id === el.dataset.id)),
+  'borrar-proyecto': async el => {
+    const r = await preguntar('¿Eliminar este proyecto?', 'Se borra la revisión de la IA. Los componentes no se tocan.', [{ valor: true, texto: 'Sí, eliminar', clase: 'peligro' }]);
+    if (!r) return;
+    await intentar(() => store.remove('projects', el.dataset.id));
+    S.projects = S.projects.filter(p => p.id !== el.dataset.id);
+    location.hash = 'proyectos';
+  },
   'activar-push': () => activarPush(false),
   exportar: exportarCSV,
   'no-instalar': () => { localStorage.setItem('inv-no-instalar', '1'); render(); },

@@ -99,6 +99,15 @@ class NubeStore {
   notify(activityId) {
     this.sb.functions.invoke('notify', { body: { activity_id: activityId } }).catch(() => {});
   }
+  // La IA compara la idea con el inventario. Devuelve el proyecto ya guardado.
+  async analizarProyecto(descripcion, projectId) {
+    const { data, error } = await this.sb.functions.invoke('proyecto', { body: { descripcion, project_id: projectId || null } });
+    if (error) {
+      const cuerpo = await error.context?.json?.().catch(() => null);
+      throw new Error(cuerpo?.error || 'No se pudo hablar con la IA. Revisa tu internet e intenta de nuevo.');
+    }
+    return data.proyecto;
+  }
 }
 
 function traducir(error) {
@@ -202,6 +211,22 @@ class DemoStore {
   }
   async removePhoto() {}
   notify() {}
+  // Respuesta de ejemplo: en modo demo no se llama a ninguna IA.
+  async analizarProyecto(descripcion, projectId) {
+    await new Promise(r => setTimeout(r, 900));
+    const db = this._load();
+    const result = {
+      resumen: 'Respuesta de ejemplo del modo demo: aquí la IA explica cómo armar el proyecto.',
+      tengo: db.components.slice(0, 2).map((c, i) => ({ component_id: c.id, nombre: c.name, cantidad: i ? c.quantity + 1 : 1, para_que: 'Parte de ejemplo', nota: i ? '' : 'Verifica que funcione antes de montarlo.' })),
+      comprar: [
+        { nombre: 'Fuente 12 V 2 A', cantidad: 1, para_que: 'Alimentar todo', especificacion: 'Fuente conmutada 12 V, mínimo 2 A', obligatorio: true },
+        { nombre: 'Caja plástica', cantidad: 1, para_que: 'Proteger el circuito', especificacion: '15 × 10 × 5 cm', obligatorio: false },
+      ],
+      dudas: ['¿Va a funcionar con batería o conectado a la pared?'],
+    };
+    const fila = { title: descripcion.slice(0, 40), description: descripcion, result, model: 'ejemplo', updated_at: new Date().toISOString() };
+    return projectId ? this.update('projects', projectId, fila) : this.insert('projects', { ...fila, created_by: this.user.name });
+  }
 }
 
 function semilla() {

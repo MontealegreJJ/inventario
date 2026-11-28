@@ -202,6 +202,8 @@ h3 { font-size: 11.5px; font-weight: 600; margin: 24px 0 10px; color: var(--tenu
 .foto-grande:has(img) { border-style: solid; border-color: var(--borde); }
 .foto-grande img { width: 100%; height: 100%; object-fit: contain; background: #08090c; }
 .foto-grande .agregar-foto { font-size: 14px; color: var(--suave); display: grid; justify-items: center; gap: 8px; }
+.foto-grande.de-caja { aspect-ratio: auto; height: 130px; }
+.foto-grande.de-caja:has(img) { height: 220px; }
 .ico-grande { color: var(--tenue); }
 .foto-botones { margin-top: 8px; }
 .foto-elegida { display: grid; justify-items: start; gap: 8px; }
@@ -218,6 +220,8 @@ h3 { font-size: 11.5px; font-weight: 600; margin: 24px 0 10px; color: var(--tenu
 .ubicacion > svg { color: var(--acento-claro); }
 .ubicacion.sin { background: var(--sup); border-color: var(--borde); }
 .ico-ubic { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: var(--acento); color: #fff; flex: none; }
+.ico-ubic { overflow: hidden; }
+.ico-ubic img { width: 100%; height: 100%; object-fit: cover; }
 .ico-ubic svg { width: 24px; height: 24px; }
 .ubicacion.sin .ico-ubic { background: var(--sup-2); color: var(--tenue); }
 .cantidades { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -242,10 +246,28 @@ h3 { font-size: 11.5px; font-weight: 600; margin: 24px 0 10px; color: var(--tenu
 .nov.nueva .ico { background: var(--acento-fondo); color: var(--acento-claro); }
 .nov .cuando { font-size: 12px; color: var(--tenue); margin-top: 2px; }
 
+/* proyectos con IA */
+.btn-ia { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; margin-right: 10px; height: 36px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 600; text-decoration: none; background: var(--acento-fondo); color: var(--acento-claro); border: 1px solid transparent; }
+.barra-titulo > div { min-width: 0; }
+.btn-ia { flex: none; }
+.btn-ia svg { width: 17px; height: 17px; }
+.btn-ia.activo { border-color: var(--acento-borde); }
+.sin-sesion .btn-ia { display: none; }
+.enlace-ia { text-decoration: none; color: var(--texto); }
+.enlace-ia > svg { color: var(--tenue); }
+a.comp { text-decoration: none; color: var(--texto); }
+.compra { display: grid; gap: 4px; }
+.nota-ia { color: var(--alerta) !important; }
+.dudas { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.aviso.verde { background: var(--ok-fondo); border-color: rgb(52 211 153 / .3); }
+.aviso.verde > svg:first-child { color: var(--ok); }
+
 /* cajas */
 .rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .caja-card { text-align: left; cursor: pointer; display: grid; gap: 4px; color: var(--texto); transition: border-color .15s; }
 .caja-card:hover { border-color: var(--acento-borde); }
+.caja-foto { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 12px; margin-bottom: 6px; background: #08090c; }
+.caja-card { align-content: start; }
 .caja-card .num { font-size: 30px; font-weight: 700; color: var(--acento-claro); line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .caja-card .desc { font-size: 13px; color: var(--suave); min-height: 2.6em; }
 .caja-card .peq { color: var(--tenue); }

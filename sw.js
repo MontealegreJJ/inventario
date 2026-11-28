@@ -1,5 +1,5 @@
 // Service worker: permite instalar la app, abrirla rápido y recibir avisos push.
-const VERSION = 'inv-v3';
+const VERSION = 'inv-v4';
 const ARCHIVOS = [
   './', 'index.html', 'css/app.css', 'js/app.js', 'js/store.js', 'js/normalize.js', 'js/config.js', 'js/icons.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/badge-96.png',
